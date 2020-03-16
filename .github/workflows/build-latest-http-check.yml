@@ -11,7 +11,7 @@ on:
 
 
 env:
-  IMAGE_NAME: http-check
+    IMAGE_NAME: http-check
 
 jobs:
   build:

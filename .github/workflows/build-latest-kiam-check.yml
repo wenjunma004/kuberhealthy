@@ -11,7 +11,7 @@ on:
 
 
 env:
-  IMAGE_NAME: kiam-check
+    IMAGE_NAME: kiam-check
 
 jobs:
   build:

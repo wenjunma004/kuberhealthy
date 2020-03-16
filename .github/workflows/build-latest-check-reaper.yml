@@ -11,7 +11,7 @@ on:
 
 
 env:
-  IMAGE_NAME: check-reaper
+    IMAGE_NAME: check-reaper
 
 jobs:
   build:

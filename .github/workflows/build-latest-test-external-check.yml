@@ -11,7 +11,7 @@ on:
 
 
 env:
-  IMAGE_NAME: test-external-check
+    IMAGE_NAME: test-external-check
 
 jobs:
   build:

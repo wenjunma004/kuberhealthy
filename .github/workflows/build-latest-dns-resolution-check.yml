@@ -11,7 +11,7 @@ on:
 
 
 env:
-  IMAGE_NAME: dns-resolution-check
+    IMAGE_NAME: dns-resolution-check
 
 jobs:
   build:

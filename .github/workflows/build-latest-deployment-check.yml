@@ -11,7 +11,7 @@ on:
 
 
 env:
-  IMAGE_NAME: deployment-check
+    IMAGE_NAME: deployment-check
 
 jobs:
   build:

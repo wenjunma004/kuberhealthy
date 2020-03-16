@@ -11,7 +11,7 @@ on:
      - "pkg/**"
 
 env:
-  IMAGE_NAME: kuberhealthy
+    IMAGE_NAME: kuberhealthy
 
 jobs:
   build:
