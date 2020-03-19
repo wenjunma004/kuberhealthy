@@ -15,6 +15,7 @@ import (
 	"log"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -49,11 +50,19 @@ func Client(GroupName string, GroupVersion string, kubeConfig string, namespace 
 		return &KuberhealthyStateClient{}, err
 	}
 
+	// make a new codec factory to create a negotiated serializer
+	cf := serializer.NewCodecFactory(scheme.Scheme)
+	groupVersion := &schema.GroupVersion{Group: GroupName, Version: GroupVersion}
+	cf.LegacyCodec(*groupVersion)
+
+	// create a new rest config
 	config := *c
-	config.ContentConfig.GroupVersion = &schema.GroupVersion{Group: GroupName, Version: GroupVersion}
+	config.ContentConfig.GroupVersion = groupVersion
 	config.APIPath = "/apis"
-	// config.NegotiatedSerializer = serializer.NegotiatedSerializerWrapper(){CodecFactory: scheme.Codecs}
-	config.NegotiatedSerializer = scheme.Codecs
+	// "NegotiatedSerializer is required when initializing a RESTClient"
+	// config.NegotiatedSerializer = serializer.WithoutConversionCodecFactory{CodecFactory: scheme.Codecs}
+	// config.NegotiatedSerializer = scheme.Codecs
+	// config.NegotiatedSerializer = runtime.NegotiatedSerializer{}
 	config.UserAgent = rest.DefaultKubernetesUserAgent()
 
 	// log.Println("creating khstate rest client")

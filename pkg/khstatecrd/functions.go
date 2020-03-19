@@ -108,7 +108,7 @@ func (c *KuberhealthyStateClient) Watch(opts metav1.ListOptions) (watch.Interfac
 	}
 	opts.Watch = true
 	return c.restClient.Get().
-		Resource("khstates").
+		Resource(resource).
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
 		Watch()
