@@ -9,7 +9,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package metrics // import "github.com/Comcast/kuberhealthy/pkg/metrics"
+package metrics // import "github.com/Comcast/kuberhealthy/v2/pkg/metrics"
 
 import (
 	"fmt"
@@ -18,7 +18,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/Comcast/kuberhealthy/pkg/health"
+	"github.com/Comcast/kuberhealthy/v2/pkg/health"
 )
 
 //GenerateMetrics takes the state and returns it in the Prometheus format

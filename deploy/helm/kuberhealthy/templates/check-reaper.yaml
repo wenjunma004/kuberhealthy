@@ -11,8 +11,12 @@ spec:
         spec:
           containers:
             - name: check-reaper
-              image: quay.io/comcast/check-reaper:1.0.0
+              image: {{ .Values.checkReaper.image.repository }}:{{ .Values.checkReaper.image.tag }}
               imagePullPolicy: IfNotPresent
+          {{- if .Values.checkReaper.nodeSelector }}
+          nodeSelector:
+{{- toYaml .Values.checkReaper.nodeSelector | nindent 12 }}
+          {{- end }}
           restartPolicy: OnFailure
           serviceAccountName: check-reaper
   concurrencyPolicy: Forbid

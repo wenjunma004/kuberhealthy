@@ -13,7 +13,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -31,11 +30,12 @@ func runDeploymentCheck() {
 	runTimeout := time.After(checkTimeLimit)
 
 	// Init a timeout for cleaning up the check.  Assume that the check should not take more than 2m.
-	cleanupTimeout := time.After(time.Minute * 5)
+	cleanupTimeout := time.After(time.Minute * 2)
 
+	// TODO: Update this logic to unique services and deployments
 	// Delete all check resources (deployment & service) from this check that should not exist.
 	select {
-	case err := <-cleanUpOrphanedResources():
+	case err := <-cleanUpOrphanedResources(ctx):
 		// If the clean up completes with errors, we report those and stop the check cleanly.
 		if err != nil {
 			log.Errorln("error when cleaning up resources:", err)
@@ -275,45 +275,37 @@ func cleanUp(ctx context.Context) error {
 
 // cleanUpOrphanedResources cleans up previous deployment and services and ensures
 // a clean slate before beginning a deployment and service check.
-func cleanUpOrphanedResources() chan error {
+func cleanUpOrphanedResources(ctx context.Context) chan error {
 
 	cleanUpChan := make(chan error)
 
-	go func() {
+	go func(c context.Context) {
 		log.Infoln("Wiping all found orphaned resources belonging to this check.")
 
 		defer close(cleanUpChan)
 
-		// Check if an existing service exists.
-		serviceExists, err := findPreviousService()
+		svcExists, err := findPreviousService()
 		if err != nil {
-			cleanUpChan <- errors.New("error listing services: " + err.Error())
+			log.Warnln("Failed to find previous service:", err.Error())
+		}
+		if svcExists {
+			log.Infoln("Found previous service.")
 		}
 
-		// Clean it up if it exists.
-		if serviceExists {
-			err = cleanUpOrphanedService()
-			if err != nil {
-				cleanUpChan <- errors.New("error cleaning up old service: " + err.Error())
-			}
-		}
-
-		// Check if an existing deployment exists.
 		deploymentExists, err := findPreviousDeployment()
 		if err != nil {
-			cleanUpChan <- errors.New("error listing deployments: " + err.Error())
+			log.Warnln("Failed to find previous deployment:", err.Error())
 		}
-
-		// Clean it up if it exists.
 		if deploymentExists {
-			err = cleanUpOrphanedDeployment()
-			if err != nil {
-				cleanUpChan <- errors.New("error cleaning up old deployment: " + err.Error())
-			}
+			log.Infoln("Found previous deployment.")
 		}
 
-		cleanUpChan <- nil
-	}()
+		if svcExists || deploymentExists {
+			cleanUpChan <- cleanUp(c)
+		} else {
+			cleanUpChan <- nil
+		}
+	}(ctx)
 
 	return cleanUpChan
 }

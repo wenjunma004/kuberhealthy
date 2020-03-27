@@ -1,4 +1,4 @@
-{{- if .Values.check.daemonset }}
+{{- if .Values.check.daemonset.enabled }}
 ---
 apiVersion: comcast.github.io/v1
 kind: KuberhealthyCheck
@@ -17,13 +17,21 @@ spec:
                 fieldPath: metadata.namespace
           - name: CHECK_POD_TIMEOUT
             value: "10m"
-        image: quay.io/comcast/kh-daemonset-check:2.0.0
+{{- range $key, $value := .Values.check.daemonset.extraEnvs }}
+          - name: {{ $key }}
+            value: {{ $value | quote }}
+{{- end }}
+        image: {{ .Values.check.daemonset.image.repository }}:{{ .Values.check.daemonset.image.tag }}
         imagePullPolicy: IfNotPresent
         name: main
         resources:
           requests:
             cpu: 10m
             memory: 50Mi
+    {{- if .Values.check.daemonset.nodeSelector }}
+    nodeSelector:
+{{- toYaml .Values.check.daemonset.nodeSelector | nindent 6 }}
+    {{- end }}
     serviceAccountName: daemonset-khcheck
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -48,7 +56,7 @@ rules:
   - apiGroups:
       - ""
       - extensions
-      - app
+      - apps
     resources:
       - daemonsets
       - pods
