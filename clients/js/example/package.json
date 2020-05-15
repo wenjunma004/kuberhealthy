@@ -7,5 +7,7 @@
   "keywords": [
     "kuberhealthy"
   ],
-  "dependencies": {}
+  "dependencies": {
+    "kuberhealthy": "0.0.13"
+  }
 }

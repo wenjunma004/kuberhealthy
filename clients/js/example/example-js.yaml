@@ -1,0 +1,24 @@
+apiVersion: comcast.github.io/v1
+kind: KuberhealthyCheck
+metadata:
+  name: example-js-check
+  namespace: kuberhealthy
+spec:
+  runInterval: 3m
+  timeout: 3m
+  extraAnnotations:
+    comcast.com/testAnnotation: test.annotation
+  extraLabels:
+    testLabel: testLabel
+  podSpec:
+    containers:
+      - env:
+          - name: FAILURE
+            value: "false"
+        image: kuberhealthy/example-js-check:v0.0.1
+        imagePullPolicy: Always
+        name: example-js-check
+        resources:
+          requests:
+            cpu: 10m
+            memory: 50Mi
