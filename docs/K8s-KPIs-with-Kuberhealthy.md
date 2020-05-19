@@ -179,7 +179,7 @@ We calculate this by counting the total number of nodes, deployments, statefulse
 
 We define duration as the control plane's capacity and utilization of throughput. We calculate this by capturing the average run duration of a Kuberhealthy [deployment check](https://github.com/Comcast/kuberhealthy/tree/master/cmd/deployment-check) run.
 
-- PromQL Query (Deployment check average duration, 1 hr step): 
+- PromQL Query (Deployment check average run duration): 
   ```
   avg(kuberhealthy_check_duration_seconds{check="kuberhealthy/deployment"}) 
   ```
