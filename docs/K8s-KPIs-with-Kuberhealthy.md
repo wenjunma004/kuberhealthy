@@ -6,58 +6,65 @@ date: 2020-05-18
 
 **Authors:** Joshulyne Park (Comcast), Eric Greer (Comcast)
 
-## K8s KPIs with Kuberhealthy
+## Building Onward from Kuberhealthy v2.0.0
 
 Last November at KubeCon San Diego 2019, we announced the release of 
 [Kuberhealthy 2.0.0](https://www.youtube.com/watch?v=aAJlWhBtzqY) - transforming Kuberhealthy into a Kubernetes operator 
 for synthetic monitoring. This new ability granted developers the means to create their own Kuberhealthy check 
-containers to monitor their applications and clusters. The community was quick to adopt this new feature and we're 
-grateful for everyone who implemented and tested Kuberhealthy 2.0.0 in their clusters. Thanks to all of you who reported 
-issues and contributed to discussions on the #kuberhealthy Slack channel. We set to work to address all your feedback 
-with a newer version of Kuberhealthy as well as provide a guide on how to install and use Kuberhealthy to capture cluster KPIs! 
+containers to synthetically monitor their applications and clusters. The community was quick to adopt this new feature and we're grateful for everyone who implemented and tested Kuberhealthy 2.0.0 in their clusters. Thanks to all of you who reported 
+issues and contributed to discussions on the #kuberhealthy Slack channel. We quickly set to work to address all your feedback 
+with a newer version of Kuberhealthy. Additionally, we began creating a guide for how to easily install and use Kuberhealthy in order to capture some really helpful synthetic [KPIs](https://kpi.org/KPI-Basics). 
 
-#### Kuberhealthy Implementation
+### Deploying Kuberhealthy
 
 To install Kuberhealthy, make sure you have [Helm 3](https://helm.sh/docs/intro/install/) installed. If not, you can use the generated flat spec files located 
-in this [deploy folder](../deploy). Make sure to use either the [kuberhealthy-prometheus.yaml](../deploy/kuberhealthy-prometheus.yaml) 
-or [kuberhealthy-prometheus-operator.yaml](../deploy/kuberhealthy-prometheus-operator.yaml). 
+in this [deploy folder](../deploy). You should use [kuberhealthy-prometheus.yaml](../deploy/kuberhealthy-prometheus.yaml) if you don't use the [Prometheus Operator](https://github.com/coreos/prometheus-operator), and [kuberhealthy-prometheus-operator.yaml](../deploy/kuberhealthy-prometheus-operator.yaml) if you do.  If you don't use Prometheus at all, you can still use Kuberhealthy with a JSON status page and/or InfluxDB integration using [this spec](../deploy/kuberhealthy.yaml). 
 
-To install using Helm 3:
-1. Create namespace "kuberhealthy" in the desired Kubernetes cluster/context: 
+#### To install using Helm 3:
+##### 1. Create namespace "kuberhealthy" in the desired Kubernetes cluster/context: 
   ```
   kubectl create namespace kuberhealthy
   ```
-2. Set your current namespace to "kuberhealthy": 
+##### 2. Set your current namespace to "kuberhealthy": 
   ```
   kubectl config set-context --current --namespace=kuberhealthy 
   ```
-3. Add the kuberhealthy repo to Helm: 
+##### 3. Add the kuberhealthy repo to Helm: 
   ```
   helm repo add kuberhealthy https://comcast.github.io/kuberhealthy/helm-repos
   ```
-4. Install kuberhealthy:
+##### 4. Dependng on your Prometheus implementation, install Kuberhealthy using the appropriate command for your cluster:
+
+  - If you use the [Prometheus Operator](https://github.com/coreos/prometheus-operator):
   ```
-  helm install kuberhealthy kuberhealthy/kuberhealthy 
+  helm install kuberhealthy kuberhealthy/kuberhealthy --set prometheus.enabled=true,prometheus.enableAlerting=true,prometheus.enableScraping=true,prometheus.serviceMonitor=true
+  ```
+  
+  - If you use Prometheus, but NOT Prometheus Operator:
+  ```
+  helm install kuberhealthy kuberhealthy/kuberhealthy --set prometheus.enabled=true,prometheus.enableAlerting=true,prometheus.enableScraping=true
+  ```
+    See additional details about configuring the appropriate scrape annotations, see the section Prometheus Integration details below. 
+  
+   - Finally, you don't use Prometheus:
+  ```
+  helm install kuberhealthy kuberhealthy/kuberhealthy
   ```
 
-Running the Helm command should automatically install Kuberhealthy 2.2.0. Running `kubectl get pods`, you should see two Kuberhealthy pods, and one check-reaper pod come up first. Running
-`kubectl get khchecks`, you should see three Kuberhealthy checks installed by default:
-- [daemonset](https://github.com/Comcast/kuberhealthy/tree/master/cmd/daemonset-check)
-- [deployment](https://github.com/Comcast/kuberhealthy/tree/master/cmd/deployment-check)
-- [dns-status-internal](https://github.com/Comcast/kuberhealthy/tree/master/cmd/dns-resolution-check)
+Running the Helm command should automatically install the newest version of Kuberhealthy (v2.2.0) along with a few basic checks. If you run `kubectl get pods`, you should see two Kuberhealthy pods.  These are the pods that create, coordinate, and track test pods.  These two Kuberhealthy pods also serve a JSON status page as well as a `/metrics` endpoint.  Every other pod you see created is a checker pod designed to execute and shut down when done.
 
-To view other available external checks, check out the [external checks registry](https://github.com/Comcast/kuberhealthy/blob/master/docs/EXTERNAL_CHECKS_REGISTRY.md).
-This registry should point to other other yaml files you can apply to your cluster to enable these checks. You can customize update your Helm values to enable other 
-external checks. To update your helm values run with a custom `values.yaml`, run:
+### Configuring Additional Checks
 
-```.env
-    helm upgrade --reuse-values -f values.yaml  prometheus-operator prometheus-operator/
-```
+Next, you can run `kubectl get khchecks`.  You should see three Kuberhealthy checks installed by default:
+- [daemonset](https://github.com/Comcast/kuberhealthy/tree/master/cmd/daemonset-check): Deploys and tears down a daemonset to ensure all nodes in the cluster are functional.
+- [deployment](https://github.com/Comcast/kuberhealthy/tree/master/cmd/deployment-check): Creates a deployment and then triggers a rolling update.  Tests that the deployment is reachable via a service and then deletes everything. Any problem in this process will cause this check to report a failure.
+- [dns-status-internal](https://github.com/Comcast/kuberhealthy/tree/master/cmd/dns-resolution-check): Validates that internal cluster DNS is functioning as expected.
 
-Kuberhealthy check pods should start running a bit after Kuberhealthy starts running. The check-reaper cronjob ensures there are no more than 5 completed checker pods left lying around at a time.
+To view other available external checks, check out the [external checks registry](https://github.com/Comcast/kuberhealthy/blob/master/docs/EXTERNAL_CHECKS_REGISTRY.md) where you can find other yaml files you can apply to your cluster to enable various checks.
 
-To get status page view of these checks, you'll need to expose the Kuberhealthy service by editing the service `kuberhealthy` and setting `Type: LoadBalancer`. The service endpoint will display
-a JSON status page: 
+Kuberhealthy check pods should start running shortly after Kuberhealthy starts running (1-2 minutes). Additionally, the check-reaper cronjob runs every few minutes to ensure there are no more than 5 completed checker pods left lying around at a time.
+
+To get status page view of these checks, you'll need to either expose the `kuberhealthy` service externally by editing the service `kuberhealthy` and setting `Type: LoadBalancer` or use `kubectl port-forward service/kuberhealty 8080:80`.  When viewed, the service endpoint will display a JSON status page that looks like this: 
 
 ```json
 {
@@ -95,22 +102,20 @@ a JSON status page:
     "CurrentMaster": "kuberhealthy-7cf79bdc86-m78qr"
 }
 ```
-This JSON page displays all Kuberhealthy checks running in your cluster. If you have Kuberhealthy checks running in different namespaces, you can filter them by
-using the `GET` variable `namespace` parameter: `?namespace=kuberhealthy,kube-system`.
 
-#### Prometheus Integration
+This JSON page displays all Kuberhealthy checks running in your cluster. If you have Kuberhealthy checks running in different namespaces, you can filter them by adding the `GET` variable `namespace` parameter: `?namespace=kuberhealthy,kube-system` onto the status page URL.
 
-Kuberhealthy has an integration with Prometheus and the Prometheus Operator. To implement this, modify your Helm chart values to enable Prometheus. 
-```.env
-prometheus:
-  enabled: true
-  name: "prometheus"
-  release: prometheus-operator
-  enableScraping: true
-  serviceMonitor: false
-  enableAlerting: false
-```
-If you're using the Prometheus Operator, make sure to enable the serviceMonitor. This should automatically enable Kuberhealthy metrics to be scraped. 
+
+### Writing Your Own Checks
+
+Kuberhealthy is designed to be extended with custom check containers that can be written by anyone to check anything.  These checks can be written in any language as long as they are packaged in a container.  This makes Kuberhealthy an excellent platform for creating your own synthetic checks!
+
+Creating your own check is a great way to validate your client library, simulate real user workflow, and create a high level of confidence in your service or system uptime. 
+
+To learn more about writing your own checks, along with simple examples, check the [custom check creation](../docs/EXTERNAL_CHECK_CREATION.md) documentation.
+
+
+#### Prometheus Integration Details
 
 When enabling Prometheus (not the operator), the Kuberhealthy service gets the following annotations added:
 ```.env
@@ -136,7 +141,8 @@ In your prometheus configuration, add the following example scrape_config that s
       action: keep
       regex: true
 ```
-You can also specify the target endpoint to be scraped using this example: 
+
+You can also specify the target endpoint to be scraped using this example job: 
 ```
 - job_name: kuberhealthy
   scrape_interval: 1m
@@ -148,24 +154,26 @@ You can also specify the target endpoint to be scraped using this example:
 ```
 
 Once the appropriate prometheus configurations are applied, you should be able to see the following Kuberhealthy metrics:
-- kuberhealthy_check 
-- kuberhealthy_check_duration_seconds
-- kuberhealthy_cluster_states
-- kuberhealthy_running
+- `kuberhealthy_check` 
+- `kuberhealthy_check_duration_seconds`
+- `kuberhealthy_cluster_states`
+- `kuberhealthy_running`
 
-#### K8s KPIs
+#### Creating Key Performance Indicators
 
 Using these Kuberhealthy metrics, our team has been able to collect KPIs based on the following definitions, calculations, and PromQL queries.
 
 *Availability*
 
-We define availability as the K8s cluster control plane being up and functioning as expected. This is measured by whether or not we can communicate with the control plane API (kubectl) and the cluster responding appropriately to a given api query. 
-We calculate this by measuring Kuberhealthy [deployment check](https://github.com/Comcast/kuberhealthy/tree/master/cmd/deployment-check) successes and failures. 
+We define availability as the K8s cluster control plane being up and functioning as expected. This is measured by our ability to create a deployment, do a rolling update, and delete the deployment within a set period of time. 
+
+We calculate this by measuring Kuberhealthy's [deployment check](https://github.com/Comcast/kuberhealthy/tree/master/cmd/deployment-check) successes and failures. 
   - Availability = Uptime / (Uptime * Downtime)
   - Uptime = Number of Deployment Check Passes * Check Run Interval
   - Downtime = Number of Deployment Check Fails * Check Run Interval
   - Check Run Interval = how often the check runs (`runInterval` set in your KuberhealthyCheck Spec)
-- PromQL Query (Availability % in the past 30 days): 
+
+- PromQL Query (Availability % over the past 30 days): 
   ```
   1 - (sum(count_over_time(kuberhealthy_check{check="kuberhealthy/deployment", status="0"}[30d])) OR vector(0))/(sum(count_over_time(kuberhealthy_check{check="kuberhealthy/deployment", status="1"}[30d])) * 100)
   ```
@@ -188,6 +196,6 @@ We define duration as the control plane's capacity and utilization of throughput
 
 We define errors as all k8s cluster and Kuberhealthy related alerts. Every time one of our Kuberhealthy check fails, we are alerted of this failure.
 
+### Thank You!
 
-Thanks again to everyone in the community for all of your contributions and help! We hope this post was useful in adopting Kuberhealthy and 
-we hope to keep hearing even more feedback from you soon!
+Thanks again to everyone in the community for all of your contributions and help! We are excited to see what you build.  As always, if you find an issue, have a feature request, or need to open a pull request, please [open an issue](https://github.com/Comcast/kuberhealthy/issues) on the Github project.
