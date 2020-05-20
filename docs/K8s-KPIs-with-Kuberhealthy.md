@@ -44,7 +44,7 @@ in this [deploy folder](../deploy). You should use [kuberhealthy-prometheus.yaml
   ```
   helm install kuberhealthy kuberhealthy/kuberhealthy --set prometheus.enabled=true,prometheus.enableAlerting=true,prometheus.enableScraping=true
   ```
-   See additional details about configuring the appropriate scrape annotations in the section [Prometheus Integration Details](#Prometheus Integration Details) below. 
+   See additional details about configuring the appropriate scrape annotations in the section [Prometheus Integration Details](#prometheus-integration-details) below. 
   
    - Finally, if you don't use Prometheus:
   ```
