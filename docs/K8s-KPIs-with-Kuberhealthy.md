@@ -6,7 +6,7 @@ date: 2020-05-18
 
 **Authors:** Joshulyne Park (Comcast), Eric Greer (Comcast)
 
-## Building Onward from Kuberhealthy v2.0.0
+### Building Onward from Kuberhealthy v2.0.0
 
 Last November at KubeCon San Diego 2019, we announced the release of 
 [Kuberhealthy 2.0.0](https://www.youtube.com/watch?v=aAJlWhBtzqY) - transforming Kuberhealthy into a Kubernetes operator 
@@ -44,18 +44,18 @@ in this [deploy folder](../deploy). You should use [kuberhealthy-prometheus.yaml
   ```
   helm install kuberhealthy kuberhealthy/kuberhealthy --set prometheus.enabled=true,prometheus.enableAlerting=true,prometheus.enableScraping=true
   ```
-    See additional details about configuring the appropriate scrape annotations, see the section Prometheus Integration details below. 
+   See additional details about configuring the appropriate scrape annotations in the section [Prometheus Integration Details](#Prometheus Integration Details) below. 
   
-   - Finally, you don't use Prometheus:
+   - Finally, if you don't use Prometheus:
   ```
   helm install kuberhealthy kuberhealthy/kuberhealthy
   ```
 
-Running the Helm command should automatically install the newest version of Kuberhealthy (v2.2.0) along with a few basic checks. If you run `kubectl get pods`, you should see two Kuberhealthy pods.  These are the pods that create, coordinate, and track test pods.  These two Kuberhealthy pods also serve a JSON status page as well as a `/metrics` endpoint.  Every other pod you see created is a checker pod designed to execute and shut down when done.
+Running the Helm command should automatically install the newest version of Kuberhealthy (v2.2.0) along with a few basic checks. If you run `kubectl get pods`, you should see two Kuberhealthy pods. These are the pods that create, coordinate, and track test pods. These two Kuberhealthy pods also serve a JSON status page as well as a `/metrics` endpoint. Every other pod you see created is a checker pod designed to execute and shut down when done.
 
 ### Configuring Additional Checks
 
-Next, you can run `kubectl get khchecks`.  You should see three Kuberhealthy checks installed by default:
+Next, you can run `kubectl get khchecks`. You should see three Kuberhealthy checks installed by default:
 - [daemonset](https://github.com/Comcast/kuberhealthy/tree/master/cmd/daemonset-check): Deploys and tears down a daemonset to ensure all nodes in the cluster are functional.
 - [deployment](https://github.com/Comcast/kuberhealthy/tree/master/cmd/deployment-check): Creates a deployment and then triggers a rolling update.  Tests that the deployment is reachable via a service and then deletes everything. Any problem in this process will cause this check to report a failure.
 - [dns-status-internal](https://github.com/Comcast/kuberhealthy/tree/master/cmd/dns-resolution-check): Validates that internal cluster DNS is functioning as expected.
@@ -64,7 +64,7 @@ To view other available external checks, check out the [external checks registry
 
 Kuberhealthy check pods should start running shortly after Kuberhealthy starts running (1-2 minutes). Additionally, the check-reaper cronjob runs every few minutes to ensure there are no more than 5 completed checker pods left lying around at a time.
 
-To get status page view of these checks, you'll need to either expose the `kuberhealthy` service externally by editing the service `kuberhealthy` and setting `Type: LoadBalancer` or use `kubectl port-forward service/kuberhealty 8080:80`.  When viewed, the service endpoint will display a JSON status page that looks like this: 
+To get status page view of these checks, you'll need to either expose the `kuberhealthy` service externally by editing the service `kuberhealthy` and setting `Type: LoadBalancer` or use `kubectl port-forward service/kuberhealty 8080:80`. When viewed, the service endpoint will display a JSON status page that looks like this: 
 
 ```json
 {
@@ -108,14 +108,14 @@ This JSON page displays all Kuberhealthy checks running in your cluster. If you 
 
 ### Writing Your Own Checks
 
-Kuberhealthy is designed to be extended with custom check containers that can be written by anyone to check anything.  These checks can be written in any language as long as they are packaged in a container.  This makes Kuberhealthy an excellent platform for creating your own synthetic checks!
+Kuberhealthy is designed to be extended with custom check containers that can be written by anyone to check anything. These checks can be written in any language as long as they are packaged in a container. This makes Kuberhealthy an excellent platform for creating your own synthetic checks!
 
 Creating your own check is a great way to validate your client library, simulate real user workflow, and create a high level of confidence in your service or system uptime. 
 
 To learn more about writing your own checks, along with simple examples, check the [custom check creation](../docs/EXTERNAL_CHECK_CREATION.md) documentation.
 
 
-#### Prometheus Integration Details
+### Prometheus Integration Details
 
 When enabling Prometheus (not the operator), the Kuberhealthy service gets the following annotations added:
 ```.env
@@ -159,7 +159,7 @@ Once the appropriate prometheus configurations are applied, you should be able t
 - `kuberhealthy_cluster_states`
 - `kuberhealthy_running`
 
-#### Creating Key Performance Indicators
+### Creating Key Performance Indicators
 
 Using these Kuberhealthy metrics, our team has been able to collect KPIs based on the following definitions, calculations, and PromQL queries.
 
