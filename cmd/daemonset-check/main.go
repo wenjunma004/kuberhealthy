@@ -36,12 +36,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	checkclient "github.com/Comcast/kuberhealthy/v2/pkg/checks/external/checkclient"
+	"github.com/Comcast/kuberhealthy/v2/pkg/checks/external/checkclient"
+	"github.com/Comcast/kuberhealthy/v2/pkg/checks/external/util"
 	"github.com/Comcast/kuberhealthy/v2/pkg/kubeClient"
 )
 
-const daemonSetBaseName = "ds-check"
+const daemonSetBaseName = "daemonset"
 const defaultDSCheckTimeout = "10m"
+const defaultUser = int64(1000)
 
 var KubeConfigFile = filepath.Join(os.Getenv("HOME"), ".kube", "config")
 var Namespace string
@@ -65,6 +67,7 @@ type Checker struct {
 	client              *kubernetes.Clientset
 	cancelFunc          context.CancelFunc // used to cancel things in-flight
 	ctx                 context.Context    // a context used for tracking check runs
+	OwnerReference      []metav1.OwnerReference
 }
 
 func init() {
@@ -105,6 +108,13 @@ func main() {
 	}
 
 	ds.client = client
+
+	// Get ownerReference
+	ownerReference, err := util.GetOwnerRef(ds.client, ds.Namespace)
+	if err != nil {
+		log.Errorln("Failed to get ownerReference for daemonset check")
+	}
+	ds.OwnerReference = ownerReference
 
 	// start listening for shutdown interrupts
 	go ds.listenForInterrupts()
@@ -189,9 +199,15 @@ func (dsc *Checker) generateDaemonSetSpec() {
 
 	checkRunTime := strconv.Itoa(int(CheckRunTime))
 	terminationGracePeriod := int64(1)
-	runAsUser := int64(1000)
-	log.Debug("Running daemon set as user 1000.")
-	var err error
+
+	// Set the runAsUser
+	runAsUser := defaultUser
+	currentUser, err := util.GetCurrentUser(defaultUser)
+	if err != nil {
+		log.Infoln("Unable to get the current user id %v", err)
+	}
+	log.Infoln("runAsUser will be set to %v", currentUser)
+	runAsUser = currentUser
 
 	// if a list of tolerations wasnt passed in, default to tolerating all taints
 	if len(dsc.Tolerations) == 0 {
@@ -210,9 +226,11 @@ func (dsc *Checker) generateDaemonSetSpec() {
 			Labels: map[string]string{
 				"app":              dsc.DaemonSetName,
 				"source":           "kuberhealthy",
+				"khcheck":          "daemonset",
 				"creatingInstance": dsc.hostname,
 				"checkRunTime":     checkRunTime,
 			},
+			OwnerReferences: dsc.OwnerReference,
 		},
 		Spec: appsv1.DaemonSetSpec{
 			MinReadySeconds: 2,
@@ -220,6 +238,7 @@ func (dsc *Checker) generateDaemonSetSpec() {
 				MatchLabels: map[string]string{
 					"app":              dsc.DaemonSetName,
 					"source":           "kuberhealthy",
+					"khcheck":          "daemonset",
 					"creatingInstance": dsc.hostname,
 					"checkRunTime":     checkRunTime,
 				},
@@ -229,6 +248,7 @@ func (dsc *Checker) generateDaemonSetSpec() {
 					Labels: map[string]string{
 						"app":              dsc.DaemonSetName,
 						"source":           "kuberhealthy",
+						"khcheck":          "daemonset",
 						"creatingInstance": dsc.hostname,
 						"checkRunTime":     checkRunTime,
 					},
@@ -236,6 +256,7 @@ func (dsc *Checker) generateDaemonSetSpec() {
 					Annotations: map[string]string{
 						"cluster-autoscaler.kubernetes.io/safe-to-evict": "true",
 					},
+					OwnerReferences: dsc.OwnerReference,
 				},
 				Spec: apiv1.PodSpec{
 					TerminationGracePeriodSeconds: &terminationGracePeriod,
@@ -293,7 +314,10 @@ func (dsc *Checker) Shutdown(sdDoneChan chan error) {
 	var err error
 	// if the ds is deployed, delete it
 	if dsc.DaemonSetDeployed {
-		dsc.remove()
+		err = dsc.remove()
+		if err != nil {
+			log.Infoln("Failed to remove", dsc.DaemonSetName)
+		}
 		err = dsc.waitForPodRemoval()
 	}
 
@@ -518,7 +542,7 @@ func (dsc *Checker) deleteDS(dsName string) error {
 	// confirm the count we are removing before issuing a delete
 	podsClient := dsc.client.CoreV1().Pods(dsc.Namespace)
 	pods, err := podsClient.List(metav1.ListOptions{
-		LabelSelector: "app=" + dsName + ",source=kuberhealthy",
+		LabelSelector: "app=" + dsName + ",source=kuberhealthy,khcheck=daemonset",
 	})
 	if err != nil {
 		return err
@@ -538,7 +562,7 @@ func (dsc *Checker) deleteDS(dsName string) error {
 	// pods are removed
 	log.Infoln(dsc.Name(), "removing daemonset pods")
 	err = podsClient.DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{
-		LabelSelector: "app=" + dsName + ",source=kuberhealthy",
+		LabelSelector: "app=" + dsName + ",source=kuberhealthy,khcheck=daemonset",
 	})
 	if err != nil {
 		log.Error("Failed to delete daemonset pods:", err)
@@ -588,7 +612,7 @@ func (dsc *Checker) getAllPods() ([]apiv1.Pod, error) {
 	for {
 		var podList *apiv1.PodList
 		podList, err := dsc.client.CoreV1().Pods(dsc.Namespace).List(metav1.ListOptions{
-			LabelSelector: "source=kuberhealthy",
+			LabelSelector: "source=kuberhealthy,khcheck=daemonset",
 		})
 		if err != nil {
 			log.Warningln("Unable to get all pods:", err)
@@ -622,7 +646,7 @@ func (dsc *Checker) getAllDaemonsets() ([]appsv1.DaemonSet, error) {
 		var dsList *appsv1.DaemonSetList
 		dsClient := dsc.getDaemonSetClient()
 		dsList, err = dsClient.List(metav1.ListOptions{
-			LabelSelector: "source=kuberhealthy",
+			LabelSelector: "source=kuberhealthy,khcheck=daemonset",
 		})
 		if err != nil {
 			log.Warningln("Unable to get all Daemon Sets:", err)
@@ -911,7 +935,7 @@ func (dsc *Checker) getNodesMissingDSPod() ([]string, error) {
 
 	// get a list of DS pods
 	pods, err := dsc.client.CoreV1().Pods(dsc.Namespace).List(metav1.ListOptions{
-		LabelSelector: "app=" + dsc.DaemonSetName + ",source=kuberhealthy",
+		LabelSelector: "app=" + dsc.DaemonSetName + ",source=kuberhealthy,khcheck=daemonset",
 	})
 	if err != nil {
 		return nodesMissingDSPods, err
@@ -1001,7 +1025,7 @@ func (dsc *Checker) remove() error {
 	// confirm the count we are removing before issuing a delete
 	podsClient := dsc.client.CoreV1().Pods(dsc.Namespace)
 	pods, err := podsClient.List(metav1.ListOptions{
-		LabelSelector: "app=" + dsc.DaemonSetName + ",source=kuberhealthy",
+		LabelSelector: "app=" + dsc.DaemonSetName + ",source=kuberhealthy,khcheck=daemonset",
 	})
 	if err != nil {
 		return err
@@ -1021,7 +1045,7 @@ func (dsc *Checker) remove() error {
 	// pods are removed
 	log.Infoln(dsc.Name(), "removing daemonset pods")
 	err = podsClient.DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{
-		LabelSelector: "app=" + dsc.DaemonSetName + ",source=kuberhealthy",
+		LabelSelector: "app=" + dsc.DaemonSetName + ",source=kuberhealthy,khcheck=daemonset",
 	})
 	if err != nil {
 		log.Error("Failed to delete daemonset pods:", err)
@@ -1070,13 +1094,13 @@ func (dsc *Checker) waitForPodRemoval() error {
 		}
 
 		pods, err := podsClient.List(metav1.ListOptions{
-			LabelSelector: "app=" + dsc.DaemonSetName + ",source=kuberhealthy",
+			LabelSelector: "app=" + dsc.DaemonSetName + ",source=kuberhealthy,khcheck=daemonset",
 		})
 		if err != nil {
 			return err
 		}
 
-		log.Infoln(dsc.Name(), "using LabelSelector: app="+dsc.DaemonSetName+",source=kuberhealthy")
+		log.Infoln(dsc.Name(), "using LabelSelector: app="+dsc.DaemonSetName+",source=kuberhealthy,khcheck=daemonset")
 
 		// if the delete ticker has ticked, then issue a repeat request
 		// for pods to be deleted.  See kuberhealthy issue #74
@@ -1084,7 +1108,7 @@ func (dsc *Checker) waitForPodRemoval() error {
 		case <-deleteTicker.C:
 			log.Infoln(dsc.Name(), "Re-issuing a pod delete command for daemonset checkers.")
 			err = podsClient.DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{
-				LabelSelector: "app=" + dsc.DaemonSetName + ",source=kuberhealthy",
+				LabelSelector: "app=" + dsc.DaemonSetName + ",source=kuberhealthy,khcheck=daemonset",
 			})
 			if err != nil {
 				return err

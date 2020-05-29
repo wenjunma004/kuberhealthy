@@ -73,6 +73,19 @@ metadata:
 apiVersion: "rbac.authorization.k8s.io/v1"
 kind: ClusterRole
 metadata:
+  name: kuberhealthy-daemonset-khcheck
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - list
+---
+# Source: kuberhealthy/templates/clusterrole.yaml
+apiVersion: "rbac.authorization.k8s.io/v1"
+kind: ClusterRole
+metadata:
   name: kuberhealthy
 rules:
   - apiGroups:
@@ -138,19 +151,6 @@ rules:
     verbs:
     - create
 ---
-# Source: kuberhealthy/templates/clusterrole.yaml
-apiVersion: "rbac.authorization.k8s.io/v1"
-kind: ClusterRole
-metadata:
-  name: kuberhealthy-daemonset-khcheck
-rules:
-- apiGroups:
-  - ""
-  resources:
-  - nodes
-  verbs:
-  - list
----
 # Source: kuberhealthy/templates/check-reaper.yaml
 apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: ClusterRoleBinding
@@ -170,20 +170,6 @@ subjects:
 apiVersion: "rbac.authorization.k8s.io/v1"
 kind: ClusterRoleBinding
 metadata:
-  name: kuberhealthy
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: kuberhealthy
-subjects:
-- kind: ServiceAccount
-  name: kuberhealthy
-  namespace: kuberhealthy
----
-# Source: kuberhealthy/templates/clusterrolebinding.yaml
-apiVersion: "rbac.authorization.k8s.io/v1"
-kind: ClusterRoleBinding
-metadata:
   name: kuberhealthy-daemonset-khcheck
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -192,6 +178,20 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: daemonset-khcheck
+  namespace: kuberhealthy
+---
+# Source: kuberhealthy/templates/clusterrolebinding.yaml
+apiVersion: "rbac.authorization.k8s.io/v1"
+kind: ClusterRoleBinding
+metadata:
+  name: kuberhealthy
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kuberhealthy
+subjects:
+- kind: ServiceAccount
+  name: kuberhealthy
   namespace: kuberhealthy
 ---
 # Source: kuberhealthy/templates/khcheck-daemonset.yaml
@@ -399,9 +399,12 @@ metadata:
   name: daemonset
   namespace: kuberhealthy
 spec:
-  runInterval: 15m
+  runInterval:  15m
   timeout: 12m
   podSpec:
+    securityContext:
+      runAsUser: 999
+      fsGroup: 999
     containers:
       - env:
           - name: POD_NAMESPACE
@@ -417,6 +420,9 @@ spec:
           requests:
             cpu: 10m
             memory: 50Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
     serviceAccountName: daemonset-khcheck
 ---
 # Source: kuberhealthy/templates/khcheck-deployment.yaml
@@ -426,26 +432,32 @@ metadata:
   name: deployment
   namespace: kuberhealthy
 spec:
-  runInterval: 10m
-  timeout: &deployment_check_timeout 15m
+  runInterval:  10m
+  timeout: 15m
   podSpec:
+    securityContext:
+      runAsUser: 999
+      fsGroup: 999
     containers:
     - name: deployment
-      image: kuberhealthy/deployment-check:v1.3.4
+      image: kuberhealthy/deployment-check:v1.4.0
       imagePullPolicy: IfNotPresent
       env:
-        - name: CHECK_TIME_LIMIT
-          value: *deployment_check_timeout
         - name: CHECK_DEPLOYMENT_REPLICAS
           value: "4"
         - name: CHECK_DEPLOYMENT_ROLLING_UPDATE
           value: "true"
+        - name: CHECK_SERVICE_ACCOUNT
+          value: "default"
       resources:
         requests:
           cpu: 25m
           memory: 15Mi
         limits:
           cpu: 40m
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
       restartPolicy: Never
     serviceAccountName: deployment-sa
     terminationGracePeriodSeconds: 60
@@ -460,6 +472,9 @@ spec:
   runInterval: 2m
   timeout: 15m
   podSpec:
+    securityContext:
+      runAsUser: 999
+      fsGroup: 999
     containers:
       - env:
           - name: CHECK_POD_TIMEOUT
@@ -473,3 +488,6 @@ spec:
           requests:
             cpu: 10m
             memory: 50Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
