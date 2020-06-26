@@ -892,18 +892,20 @@ func (k *Kuberhealthy) fetchPodByIPForDuration(remoteIP string, d time.Duration)
 	endTime := time.Now().Add(d)
 
 	for {
+		var err error
+		var pod v1.Pod
 		if time.Now().After(endTime) {
-			return v1.Pod{}, errors.New("Failed to fetch source pod with IP " + remoteIP + " after trying for " + d.String())
+			return v1.Pod{}, errors.New("Failed to fetch source pod with IP " + remoteIP + " after trying for " + d.String() + ". Error: " + err.Error())
 		}
 
-		p, err := k.fetchPodByIP(remoteIP)
+		pod, err = k.fetchPodByIP(remoteIP)
 		if err != nil {
 			log.Warningln("was unable to find calling pod with remote IP", remoteIP, "while watching for duration")
 			time.Sleep(time.Second)
 			continue
 		}
 
-		return p, err
+		return pod, err
 	}
 }
 
